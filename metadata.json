@@ -1,0 +1,7 @@
+{
+  "name": "SMART INVENTORY",
+  "description": "A smart inventory management app to track your boxes and items during moving or storage.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme {
+  --dark-mode: selector;
+}
+
+/* Explicitly define the dark variant to override media query defaults */
+@custom-variant dark (&:where(.dark, .dark *));

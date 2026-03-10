@@ -1,7 +1,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import cookieParser from 'cookie-parser';
-import Database from 'better-sqlite3';
+import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -9,47 +9,11 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/* ---------------- DATABASE SETUP ---------------- */
+/* ---------------- DATABASE SETUP (Supabase) ---------------- */
 
-const dataDir = process.env.DB_PATH || './data';
-
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const db = new Database(path.join(dataDir, 'box_tracker.db'));
-
-// Initialize DB
-db.exec(`
-  CREATE TABLE IF NOT EXISTS houses (
-    id TEXT PRIMARY KEY,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  CREATE TABLE IF NOT EXISTS boxes (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    items TEXT,
-    house_id TEXT REFERENCES houses(id)
-  );
-  CREATE TABLE IF NOT EXISTS feedback (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    house_id TEXT,
-    message TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-
-// Migration: Add house_id to boxes if it doesn't exist
-const tableInfo = db.prepare("PRAGMA table_info(boxes)").all();
-const hasHouseId = tableInfo.some((col: any) => col.name === 'house_id');
-if (!hasHouseId) {
-  try {
-    db.exec("ALTER TABLE boxes ADD COLUMN house_id TEXT REFERENCES houses(id)");
-    console.log("Migration: Added house_id column to boxes table");
-  } catch (err) {
-    console.error("Migration failed:", err);
-  }
-}
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY!;
+const db = createClient(supabaseUrl, supabaseKey);
 
 async function startServer() {
   const app = express();
@@ -62,8 +26,8 @@ async function startServer() {
 
   // Health check
   app.get('/api/health', (req, res) => {
-    res.json({ 
-      status: 'ok', 
+    res.json({
+      status: 'ok',
       time: new Date().toISOString(),
       env: process.env.NODE_ENV,
       hasDist: fs.existsSync(path.join(__dirname, 'dist')),
@@ -75,12 +39,11 @@ async function startServer() {
   app.get('/api/ping', (req, res) => res.send('pong'));
 
   // Auth Middleware (House ID based)
-  const authenticate = (req: any, res: any, next: any) => {
+  const authenticate = async (req: any, res: any, next: any) => {
     const houseId = req.cookies.house_id;
     if (!houseId) return res.status(401).json({ error: 'No House ID connected' });
-    
-    // Verify house exists
-    const house = db.prepare('SELECT id FROM houses WHERE id = ?').get(houseId);
+
+    const { data: house } = await db.from('houses').select('id').eq('id', houseId).single();
     if (!house) return res.status(401).json({ error: 'Invalid House ID' });
 
     req.houseId = houseId;
@@ -88,7 +51,7 @@ async function startServer() {
   };
 
   // House Routes
-  app.post('/api/house/join', (req, res) => {
+  app.post('/api/house/join', async (req, res) => {
     const { houseId, create } = req.body;
     if (!houseId || houseId.length < 3) {
       return res.status(400).json({ error: 'House ID must be at least 3 characters' });
@@ -96,12 +59,12 @@ async function startServer() {
 
     const normalizedId = houseId.trim().toLowerCase();
 
-    // Check if exists
-    const existing = db.prepare('SELECT id FROM houses WHERE id = ?').get(normalizedId);
-    
+    const { data: existing } = await db.from('houses').select('id').eq('id', normalizedId).single();
+
     if (!existing) {
       if (create) {
-        db.prepare('INSERT INTO houses (id) VALUES (?)').run(normalizedId);
+        const { error } = await db.from('houses').insert({ id: normalizedId });
+        if (error) return res.status(500).json({ error: 'Failed to create house' });
       } else {
         return res.status(404).json({ error: 'House not found', notFound: true });
       }
@@ -126,38 +89,45 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  app.get('/api/house/current', (req, res) => {
+  app.get('/api/house/current', async (req, res) => {
     const houseId = req.cookies.house_id;
     if (!houseId) return res.json(null);
-    
-    const house = db.prepare('SELECT id FROM houses WHERE id = ?').get(houseId);
+
+    const { data: house } = await db.from('houses').select('id').eq('id', houseId).single();
     res.json(house || null);
   });
 
   // Data Routes
-  app.get('/api/boxes', authenticate, (req: any, res) => {
+  app.get('/api/boxes', authenticate, async (req: any, res) => {
     console.log(`[GET /api/boxes] Fetching boxes for house: ${req.houseId}`);
-    const boxes = db.prepare('SELECT * FROM boxes WHERE house_id = ?').all(req.houseId);
-    console.log(`[GET /api/boxes] Found ${boxes.length} boxes`);
-    res.json(boxes.map((b: any) => ({ ...b, items: JSON.parse(b.items) })));
+
+    const { data: boxes, error } = await db.from('boxes').select('*').eq('house_id', req.houseId);
+    if (error) return res.status(500).json({ error: 'Failed to fetch boxes' });
+
+    console.log(`[GET /api/boxes] Found ${boxes?.length || 0} boxes`);
+    res.json((boxes || []).map((b: any) => ({ ...b, items: JSON.parse(b.items) })));
   });
 
-  app.post('/api/boxes', authenticate, (req: any, res) => {
+  app.post('/api/boxes', authenticate, async (req: any, res) => {
     const { boxes } = req.body;
     console.log(`[POST /api/boxes] Saving ${boxes?.length || 0} boxes for house: ${req.houseId}`);
-    
-    const deleteOld = db.prepare('DELETE FROM boxes WHERE house_id = ?');
-    const insertNew = db.prepare('INSERT INTO boxes (house_id, id, name, items) VALUES (?, ?, ?, ?)');
 
     try {
-      const transaction = db.transaction((data) => {
-        deleteOld.run(req.houseId);
-        for (const box of data) {
-          insertNew.run(req.houseId, box.id, box.name, JSON.stringify(box.items));
-        }
-      });
+      const { error: deleteError } = await db.from('boxes').delete().eq('house_id', req.houseId);
+      if (deleteError) throw deleteError;
 
-      transaction(boxes);
+      if (boxes && boxes.length > 0) {
+        const rows = boxes.map((box: any) => ({
+          id: box.id,
+          name: box.name,
+          items: JSON.stringify(box.items),
+          house_id: req.houseId,
+        }));
+
+        const { error: insertError } = await db.from('boxes').insert(rows);
+        if (insertError) throw insertError;
+      }
+
       console.log(`[POST /api/boxes] Successfully saved boxes for house: ${req.houseId}`);
       res.json({ success: true });
     } catch (err) {
@@ -166,56 +136,55 @@ async function startServer() {
     }
   });
 
-  app.post('/api/feedback', (req, res) => {
+  app.post('/api/feedback', async (req, res) => {
     const { message } = req.body;
     const houseId = req.cookies.house_id || 'anonymous';
-    
+
     if (!message || message.length < 5) {
       return res.status(400).json({ error: 'Feedback message is too short' });
     }
 
-    try {
-      db.prepare('INSERT INTO feedback (house_id, message) VALUES (?, ?)').run(houseId, message);
-      res.json({ success: true });
-    } catch (err) {
-      console.error('Error saving feedback:', err);
-      res.status(500).json({ error: 'Failed to save feedback' });
+    const { error } = await db.from('feedback').insert({ house_id: houseId, message });
+    if (error) {
+      console.error('Error saving feedback:', error);
+      return res.status(500).json({ error: 'Failed to save feedback' });
     }
+
+    res.json({ success: true });
   });
 
-  app.get('/api/admin/feedback', (req, res) => {
-    // In a real app, we would check for admin credentials here
-    try {
-      const feedback = db.prepare('SELECT * FROM feedback ORDER BY created_at DESC').all();
-      res.json(feedback);
-    } catch (err) {
-      console.error('Error fetching feedback:', err);
-      res.status(500).json({ error: 'Failed to fetch feedback' });
+  app.get('/api/admin/feedback', async (req, res) => {
+    const { data, error } = await db.from('feedback').select('*').order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error fetching feedback:', error);
+      return res.status(500).json({ error: 'Failed to fetch feedback' });
     }
+    res.json(data || []);
   });
 
-  app.get('/api/admin/houses', (req, res) => {
-    try {
-      const houses = db.prepare('SELECT * FROM houses ORDER BY created_at DESC').all();
-      res.json(houses);
-    } catch (err) {
-      console.error('Error fetching houses:', err);
-      res.status(500).json({ error: 'Failed to fetch houses' });
+  app.get('/api/admin/houses', async (req, res) => {
+    const { data, error } = await db.from('houses').select('*').order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error fetching houses:', error);
+      return res.status(500).json({ error: 'Failed to fetch houses' });
     }
+    res.json(data || []);
   });
 
-  app.delete('/api/admin/houses/:id', (req, res) => {
+  app.delete('/api/admin/houses/:id', async (req, res) => {
     const { id } = req.params;
     if (id === 'admin') {
       return res.status(400).json({ error: 'Cannot delete admin house' });
     }
+
     try {
-      const transaction = db.transaction(() => {
-        db.prepare('DELETE FROM boxes WHERE house_id = ?').run(id);
-        db.prepare('DELETE FROM feedback WHERE house_id = ?').run(id);
-        db.prepare('DELETE FROM houses WHERE id = ?').run(id);
-      });
-      transaction();
+      const { error: e1 } = await db.from('boxes').delete().eq('house_id', id);
+      if (e1) throw e1;
+      const { error: e2 } = await db.from('feedback').delete().eq('house_id', id);
+      if (e2) throw e2;
+      const { error: e3 } = await db.from('houses').delete().eq('id', id);
+      if (e3) throw e3;
+
       res.json({ success: true });
     } catch (err) {
       console.error('Error deleting house:', err);
@@ -224,9 +193,8 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  // Only use production mode if the dist directory actually exists
   const isProd = fs.existsSync(path.join(__dirname, 'dist'));
-  
+
   if (!isProd) {
     console.log('Starting in DEVELOPMENT mode with Vite middleware (dist not found)');
     const vite = await createViteServer({
@@ -234,11 +202,11 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
-    
+
     app.use('*', async (req, res, next) => {
       const url = req.originalUrl;
       if (url.startsWith('/api')) return next();
-      
+
       try {
         const indexPath = path.resolve(__dirname, 'index.html');
         if (!fs.existsSync(indexPath)) {

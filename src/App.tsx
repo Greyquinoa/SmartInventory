@@ -345,7 +345,7 @@ const RECENT_SEARCHES = ['Winter Clothes', 'Books', 'Kitchenware', 'Electronics'
 
 // --- Screen Components (Defined outside to prevent focus loss) ---
 
-const BoxTrackerHomeScreen = ({ onNavigate, houseId, language }: { onNavigate: (s: Screen) => void, houseId: string | null, language: Language }) => {
+const BoxTrackerHomeScreen = ({ onNavigate, houseId, language }: { onNavigate: (s: Screen, state?: any) => void, houseId: string | null, language: Language }) => {
   const t = useTranslation(language);
   const heroTextParts = t('keepTrackOfEveryBox').split('|');
 
@@ -462,7 +462,7 @@ const ScanScreen = ({
   scannedId,
   language
 }: { 
-  onNavigate: (s: Screen) => void,
+  onNavigate: (s: Screen, state?: any) => void,
   manualId: string,
   setManualId: (s: string) => void,
   handleScan: (id?: string) => void,
@@ -631,7 +631,7 @@ const SearchScreen = ({
   onSearch,
   language
 }: { 
-  onNavigate: (s: Screen) => void, 
+  onNavigate: (s: Screen, state?: any) => void, 
   searchQuery: string, 
   setSearchQuery: (s: string) => void,
   boxes: Box[],
@@ -687,8 +687,7 @@ const SearchScreen = ({
                     key={item.id}
                     onClick={() => {
                       onSearch(searchQuery.trim());
-                      setSelectedBoxId(item.boxId);
-                      onNavigate('BOX_DETAILS');
+                      onNavigate('BOX_DETAILS', { selectedBoxId: item.boxId });
                     }}
                     className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border border-white/20 dark:border-slate-800/50 active:bg-white/60 dark:active:bg-slate-800/60 transition-all shadow-sm"
                   >
@@ -752,7 +751,7 @@ const BoxDetailsScreen = ({
   onQuickRemove,
   language
 }: { 
-  onNavigate: (s: Screen) => void, 
+  onNavigate: (s: Screen, state?: any) => void, 
   selectedBox: Box, 
   deleteBox: (id: string) => void,
   onEditItem: (item: Item) => void,
@@ -1009,7 +1008,7 @@ const AddItemScreen = ({
   isEditing,
   language
 }: { 
-  onNavigate: (s: Screen) => void, 
+  onNavigate: (s: Screen, state?: any) => void, 
   newItem: { name: string, description: string, quantity: number, imageUrl?: string },
   setNewItem: (item: any) => void,
   handleAddItem: () => void,
@@ -1303,7 +1302,7 @@ const AddItemScreen = ({
   );
 };
 
-const JoinHouseScreen = ({ onNavigate, onJoin, language }: { onNavigate: (s: Screen) => void, onJoin: (id: string, create?: boolean) => Promise<{success: boolean, error?: string, notFound?: boolean}>, language: Language }) => {
+const JoinHouseScreen = ({ onNavigate, onJoin, language }: { onNavigate: (s: Screen, state?: any) => void, onJoin: (id: string, create?: boolean) => Promise<{success: boolean, error?: string, notFound?: boolean}>, language: Language }) => {
   const [houseId, setHouseId] = useState('');
   const [error, setError] = useState('');
   const [showCreateConfirm, setShowCreateConfirm] = useState(false);
@@ -1449,7 +1448,7 @@ const JoinHouseScreen = ({ onNavigate, onJoin, language }: { onNavigate: (s: Scr
   );
 };
 
-const BoxesScreen = ({ onNavigate, boxes, setSelectedBoxId, language }: { onNavigate: (s: Screen) => void, boxes: Box[], setSelectedBoxId: (id: string) => void, language: Language }) => {
+const BoxesScreen = ({ onNavigate, boxes, setSelectedBoxId, language }: { onNavigate: (s: Screen, state?: any) => void, boxes: Box[], setSelectedBoxId: (id: string) => void, language: Language }) => {
   const t = useTranslation(language);
   return (
     <div className="flex flex-col min-h-screen bg-transparent transition-colors duration-300">
@@ -1467,8 +1466,7 @@ const BoxesScreen = ({ onNavigate, boxes, setSelectedBoxId, language }: { onNavi
             <button 
               key={box.id}
               onClick={() => {
-                setSelectedBoxId(box.id);
-                onNavigate('BOX_DETAILS');
+                onNavigate('BOX_DETAILS', { selectedBoxId: box.id });
               }}
               className="aspect-square rounded-3xl bg-white/40 dark:bg-slate-900/40 backdrop-blur-md border border-white/20 dark:border-slate-800/50 flex flex-col items-center justify-center gap-3 p-4 active:scale-95 transition-all shadow-sm"
             >
@@ -1492,7 +1490,7 @@ const BoxesScreen = ({ onNavigate, boxes, setSelectedBoxId, language }: { onNavi
   );
 };
 
-const ProfileScreen = ({ onNavigate, boxes, houseId, onLogout, language }: { onNavigate: (s: Screen) => void, boxes: Box[], houseId: string | null, onLogout: () => void, language: Language }) => {
+const ProfileScreen = ({ onNavigate, boxes, houseId, onLogout, language }: { onNavigate: (s: Screen, state?: any) => void, boxes: Box[], houseId: string | null, onLogout: () => void, language: Language }) => {
   const t = useTranslation(language);
   return (
     <div className="flex flex-col min-h-screen bg-transparent transition-colors duration-300">
@@ -1560,7 +1558,7 @@ const ProfileScreen = ({ onNavigate, boxes, houseId, onLogout, language }: { onN
   );
 };
 
-const HelpScreen = ({ onNavigate, language }: { onNavigate: (s: Screen) => void, language: Language }) => {
+const HelpScreen = ({ onNavigate, language }: { onNavigate: (s: Screen, state?: any) => void, language: Language }) => {
   const t = useTranslation(language);
   return (
     <div className="flex flex-col min-h-screen bg-transparent transition-colors duration-300">
@@ -1626,7 +1624,7 @@ const SettingsScreen = ({
   language,
   onLanguageChange
 }: { 
-  onNavigate: (s: Screen) => void, 
+  onNavigate: (s: Screen, state?: any) => void, 
   houseId: string | null,
   darkMode: boolean,
   onToggleDarkMode: () => void,
@@ -1703,7 +1701,7 @@ const SettingsScreen = ({
   );
 };
 
-const FeedbackScreen = ({ onNavigate, language }: { onNavigate: (s: Screen) => void, language: Language }) => {
+const FeedbackScreen = ({ onNavigate, language }: { onNavigate: (s: Screen, state?: any) => void, language: Language }) => {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -1780,7 +1778,7 @@ const FeedbackScreen = ({ onNavigate, language }: { onNavigate: (s: Screen) => v
   );
 };
 
-const AdminPanelScreen = ({ onNavigate, language }: { onNavigate: (s: Screen) => void, language: Language }) => {
+const AdminPanelScreen = ({ onNavigate, language }: { onNavigate: (s: Screen, state?: any) => void, language: Language }) => {
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [houses, setHouses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1920,6 +1918,28 @@ export default function App() {
     localStorage.setItem('language', language);
   }, [language]);
 
+  // Browser history management
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state) {
+        if (event.state.screen) setCurrentScreen(event.state.screen);
+        if (event.state.selectedBoxId !== undefined) setSelectedBoxId(event.state.selectedBoxId);
+      } else {
+        setCurrentScreen('HOME');
+        setSelectedBoxId(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    // Initial state setup
+    if (!history.state) {
+      history.replaceState({ screen: 'HOME', selectedBoxId: null }, '');
+    }
+
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const hasLoadedBoxes = React.useRef(false);
 
   const selectedBox = boxes.find(b => b.id === selectedBoxId) || boxes[0];
@@ -2040,8 +2060,16 @@ export default function App() {
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
-  const navigateTo = (screen: Screen) => {
-    setCurrentScreen(screen);
+  const navigateTo = (screen: Screen, extraState?: { selectedBoxId?: string | null }) => {
+    const newSelectedBoxId = extraState?.selectedBoxId !== undefined ? extraState.selectedBoxId : selectedBoxId;
+    
+    if (screen !== currentScreen || newSelectedBoxId !== selectedBoxId) {
+      history.pushState({ screen, selectedBoxId: newSelectedBoxId }, '');
+      setCurrentScreen(screen);
+      if (extraState?.selectedBoxId !== undefined) {
+        setSelectedBoxId(extraState.selectedBoxId);
+      }
+    }
   };
 
   const addToRecentSearches = (term: string) => {
@@ -2062,8 +2090,7 @@ export default function App() {
     const existingBox = boxes.find(b => b.id === idToUse || b.name === idToUse);
 
     if (existingBox) {
-      setSelectedBoxId(existingBox.id);
-      navigateTo('BOX_DETAILS');
+      navigateTo('BOX_DETAILS', { selectedBoxId: existingBox.id });
     } else {
       setScannedId(idToUse);
       setShowCreatePrompt(true);
@@ -2079,9 +2106,8 @@ export default function App() {
       items: []
     };
     setBoxes([...boxes, newBox]);
-    setSelectedBoxId(newBox.id);
     setShowCreatePrompt(false);
-    navigateTo('BOX_DETAILS');
+    navigateTo('BOX_DETAILS', { selectedBoxId: newBox.id });
   };
 
   const handleAddItem = () => {
